@@ -64,7 +64,43 @@ length/hash and redirects. It does not cover Ethernet/dmtcp. The UART fixture
 has a finite 90-second total deadline to include serial handshakes/redirects.
 Native socket tests and the TCP diagnostic use shorter finite limits.
 
-Board module checks passed 3/3. Ethernet validation is pending a server address
-reachable from the board; the isolated build container was unreachable from
-its LAN. UART interoperability is tracked separately and does not substitute
-for the missing network test. Renode is omitted as requested.
+Recorded on STM32F746G-DISCO with the existing loader:
+
+- Actual module checks: 3/3.
+- UART/OpenSSL engine scenarios: 9/9 (HTTP framing/redirects, HTTPS TLS 1.2/1.3,
+  HTTPS reconnect/redirect, hostname/CA rejection and downgrade rejection).
+- Real Ethernet/dmtcp HTTP: three complete 200 responses from example.com.
+- Real Ethernet/dmtcp HTTPS: 3/3 complete verified downloads from httpbin.org;
+  status, body length and FNV-1a hash match Python's independent HTTPS client.
+- A 65536-byte HTTPS binary download also matched the independent reference;
+  one recorded full-firmware run took 50.25 seconds including the handshake.
+- After network TLS: UTC 6/6, RTC 12/12 and RNG 6/6. PC UTC was restored and the
+  UTC library-service unit remained running.
+
+The TCP diagnostic uses priority 1, checks buffered readiness before waiting on
+coalesced semaphore notifications, and has a finite 60-second transaction limit.
+Applications must make the same level-versus-edge distinction when integrating
+an event-based byte queue. TLS arithmetic consumes CPU even though I/O is
+nonblocking; schedule the calling worker appropriately for the target firmware.
+
+A reproducible independent-reference network harness is included:
+
+```sh
+python3 tests/probe/run_tcp.py --boot-dir /path/to/dmod-boot \
+  --url https://server.example/file --server-ip SERVER_IPV4 \
+  --ca-board /ca.pem --ca-local build/board-fixtures/ca.pem --regressions
+```
+
+For public servers, omit --ca-local to use the PC system trust store and upload
+an appropriate public root CA to the board. Test fixtures/private keys remain
+local. The PC's isolated container was not reachable from the board's LAN, so
+network validation used public endpoints instead of claiming a local-server run.
+Renode is omitted as requested.
+
+Long-chain latency remains a separate observed TLS limitation: some example.com
+HTTPS attempts completed, while others ended in TLS truncation after a slow
+handshake. Native execution and controlled OpenSSL peers passed. Track this in
+[dmtls issue 3](https://github.com/choco-technologies/dmtls/issues/3); the three
+passing HTTPS network repetitions above used httpbin.org. The upstream arithmetic
+configuration update is [dmtls PR 2](https://github.com/choco-technologies/dmtls/pull/2).
+No certificate or hostname verification is bypassed.

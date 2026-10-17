@@ -17,6 +17,10 @@ the stream and detach callbacks. It is called exactly once per attempted open,
 including a failed/pending open. A redirect can then start a new open on that
 same adapter. The connector supplies readiness notification to its owner.
 
+The diagnostic applications reserve 16 KiB of stack; budget caller stack for
+HTTP parsing and TLS arithmetic, rather than invoking them on a small network
+callback stack.
+
 The application schedules the absolute transaction deadline as well as stream
 readiness; it cannot wait forever for an absent peer event. `timeout_ms` is
 nonzero, at most INT32_MAX, and starts at create. It includes all redirects,

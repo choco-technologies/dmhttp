@@ -36,7 +36,8 @@ version selection. The existing SDK/loader and 240-byte DMF format are unchanged
    paths. HTTP error statuses remain available to the application.
 
 On `DMHTTP_WANT_READ`/`DMHTTP_WANT_WRITE`, wait for the adapter's readiness event
-or transaction deadline. On `DMHTTP_AGAIN`, schedule another bounded execution
+or transaction deadline. Drain already-buffered adapter data before waiting for
+a new edge notification. On `DMHTTP_AGAIN`, schedule another bounded execution
 step. The library never sleeps or polls the network. Caller backpressure is
 natural: when it stops reading, dmhttp stops consuming transport bytes.
 

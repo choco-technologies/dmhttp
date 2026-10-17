@@ -16,6 +16,7 @@ struct adapter
     dmosi_semaphore_t ready;
     uint8_t rx[RX_CAPACITY];
     size_t head, count;
+    size_t sent_bytes, received_bytes;
     bool started, connected, eof, failed;
 };
 static void wake(struct adapter *a)
@@ -36,6 +37,7 @@ static void data(dmtcp_conn_t conn, const uint8_t *bytes, size_t n, void *user)
     (void)conn;
     struct adapter *a = user;
     dmosi_mutex_lock(a->lock);
+    a->received_bytes += n;
     if (!n)
         a->eof = true;
     else if (n > RX_CAPACITY - a->count)
@@ -133,6 +135,7 @@ static dmtls_result_t send_stream(void *user, const uint8_t *bytes, size_t n, si
         return DMTLS_ERR_TRANSPORT;
     if (!count)
         return DMTLS_WANT_WRITE;
+    a->sent_bytes += (size_t)count;
     *sent = (size_t)count;
     return DMTLS_OK;
 }
@@ -169,6 +172,20 @@ static dmhttp_close_fn const volatile close_cb DMOD_GLOBAL_POINTER = close_strea
 static dmtls_send_fn const volatile send_cb DMOD_GLOBAL_POINTER = send_stream;
 static dmtls_recv_fn const volatile recv_cb DMOD_GLOBAL_POINTER = recv_stream;
 static dmtls_entropy_fn const volatile entropy_cb DMOD_GLOBAL_POINTER = entropy;
+/* A coalesced callback is an edge, not a count of readable records. Drain
+ * already buffered bytes before waiting for the next notification. */
+static void wait_for_io(struct adapter *a, int result, uint32_t remaining)
+{
+    dmosi_mutex_lock(a->lock);
+    bool ready = a->failed || a->eof;
+    if (result == DMHTTP_WANT_READ)
+        ready = ready || a->count != 0;
+    else
+        ready = ready || (a->conn && dmtcp_send_space(a->conn) > 0);
+    dmosi_mutex_unlock(a->lock);
+    if (!ready && remaining)
+        dmosi_semaphore_wait(a->ready, 1, (int32_t)remaining);
+}
 int main(int argc, char *argv[])
 {
     if (argc != 4)
@@ -215,7 +232,7 @@ int main(int argc, char *argv[])
     options.transport.stream.receive = recv_cb;
     options.transport.stream.user = a;
     options.tls_config = config;
-    options.timeout_ms = 20000;
+    options.timeout_ms = 60000;
     options.max_redirects = 3;
     options.max_body_bytes = 8 * 1024 * 1024;
     rc = dmhttp_create(argv[1], &options, &request);
@@ -248,7 +265,7 @@ int main(int argc, char *argv[])
         {
             uint32_t elapsed = dmosi_get_tick_count() - started;
             if (elapsed < options.timeout_ms)
-                dmosi_semaphore_wait(a->ready, 1, (int32_t)(options.timeout_ms - elapsed));
+                wait_for_io(a, rc, options.timeout_ms - elapsed);
         }
     }
     dmhttp_response_t response;
@@ -257,6 +274,8 @@ int main(int argc, char *argv[])
                 rc, response.status_code, (unsigned)response.body_bytes, hash, response.redirects,
                 response.tls_error, response.verification_flags);
 cleanup:
+    Dmod_Printf("HTTP_TCP_BYTES sent=%u received=%u queued=%u\n", (unsigned)a->sent_bytes,
+                (unsigned)a->received_bytes, (unsigned)a->count);
     if (request)
         dmhttp_destroy(request);
     if (config)

@@ -1,4 +1,6 @@
 set(DMOD_MODULE_NAME httpprobe)
+# Diagnostics do crypto work: keep them above the FreeRTOS idle priority.
+set(DMOD_PRIORITY 1)
 set(DMOD_STACK_SIZE 16384)
 set(DMOD_DMR_PATH ${CMAKE_CURRENT_SOURCE_DIR}/httpprobe.dmr)
 dmod_add_executable(${DMOD_MODULE_NAME} ${PROJECT_VERSION} httpprobe.c)
