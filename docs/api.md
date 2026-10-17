@@ -17,6 +17,22 @@ the stream and detach callbacks. It is called exactly once per attempted open,
 including a failed/pending open. A redirect can then start a new open on that
 same adapter. The connector supplies readiness notification to its owner.
 
+For DMOD applications, callback addresses must use the existing GOT mechanism.
+Keep each persistent function pointer in a typed `const volatile` variable
+annotated with `DMOD_GLOBAL_POINTER`, then assign it into a zero-initialized
+options structure at runtime. For example:
+
+```c
+static dmhttp_open_fn const volatile open_callback DMOD_GLOBAL_POINTER = app_open;
+/* Use the same pattern for close/send/receive. */
+dmhttp_options_t options = {0};
+options.transport.open = open_callback;
+```
+
+The complete pattern is in `tests/probe/httpprobe.c`. A mixed static aggregate
+containing callbacks is not covered by the original loader's GOT relocation.
+
+
 The diagnostic applications reserve 16 KiB of stack; budget caller stack for
 HTTP parsing and TLS arithmetic, rather than invoking them on a small network
 callback stack.
