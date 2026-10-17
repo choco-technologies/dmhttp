@@ -1,0 +1,33 @@
+name: CI
+on:
+  push:
+    branches: [main, master, develop]
+  pull_request:
+    branches: [main, master, develop]
+jobs:
+  build:
+    name: Build and test (${{ matrix.tools }})
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        tools: [arch/x86_64, arch/armv7/cortex-m4, arch/armv7/cortex-m7]
+    container:
+      image: chocotechnologies/dmod:1.0.4
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install test and audit tools
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends python3 openssl
+      - name: Build
+        run: |
+          cmake -S . -B build -DDMOD_TOOLS_NAME=${{ matrix.tools }}
+          cmake --build build --parallel 4
+          test -f build/dmf/dmhttp.dmf
+          test -f build/dmf/test_dmhttp.dmf
+      - name: Native tests
+        if: matrix.tools == 'arch/x86_64'
+        run: ctest --test-dir build --output-on-failure
