@@ -5,14 +5,52 @@ on:
     types: [created]
 
 jobs:
+  discover-architectures:
+    name: Discover Architectures
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    container:
+      image: chocotechnologies/dmod:1.0.4
+    outputs:
+      architectures: ${{ steps.list-archs.outputs.architectures }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Fetch dmod to discover architectures
+        run: |
+          # A plain `git clone` here (rather than configuring dmhttp's
+          # own CMakeLists.txt via FetchContent, as before) so this step only
+          # ever depends on dmod itself - not on dmhttp's
+          # dmod_link_modules() fetches of other modules, which this step has
+          # no business needing just to list dmod's supported architectures,
+          # and which previously made this discovery job (and therefore the
+          # whole release) fail outright whenever any of those unrelated
+          # external fetches hiccuped.
+          git clone --depth 1 https://github.com/choco-technologies/dmod.git dmod_discovery
+
+      - name: List available architectures
+        id: list-archs
+        run: |
+          # create JSON array
+          ARCHS=$(find dmod_discovery/configs/arch -name "tools-cfg.cmake" | \
+            sed "s|dmod_discovery/configs/arch/||g" | \
+            sed 's|/tools-cfg.cmake||g' | \
+            jq -R -s -c 'split("\n") | map(select(length > 0))')
+
+          echo "Found architectures: $ARCHS"
+          echo "architectures=$ARCHS" >> $GITHUB_OUTPUT
+
   build-release:
     name: Build Release for ${{ matrix.arch_name }}
+    needs: discover-architectures
     runs-on: ubuntu-latest
     permissions:
       contents: write
     strategy:
       matrix:
-        arch_name: [x86_64, armv7/cortex-m4, armv7/cortex-m7]
+        arch_name: ${{ fromJson(needs.discover-architectures.outputs.architectures) }}
 
     container:
       image: chocotechnologies/dmod:1.0.4
@@ -21,10 +59,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install audit interpreter
+      - name: Install audit and test dependencies
         run: |
           apt-get update
-          apt-get install -y --no-install-recommends python3
+          apt-get install -y --no-install-recommends python3 openssl
 
       - name: Extract version from tag
         id: get_version
@@ -94,7 +132,7 @@ jobs:
 
   generate-versions-manifest:
     name: Generate versions.dmm
-    needs: [build-release]
+    needs: [discover-architectures, build-release]
     runs-on: ubuntu-latest
     permissions:
       contents: read

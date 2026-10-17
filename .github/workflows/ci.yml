@@ -1,33 +1,50 @@
 name: CI
+
 on:
   push:
-    branches: [main, master, develop]
+    branches: [ main, master, develop ]
   pull_request:
-    branches: [main, master, develop]
+    branches: [ main, master, develop ]
+
 jobs:
-  build:
-    name: Build and test (${{ matrix.tools }})
+  build-and-test:
+    name: Build and Test
     runs-on: ubuntu-latest
     permissions:
       contents: read
-    strategy:
-      fail-fast: false
-      matrix:
-        tools: [arch/x86_64, arch/armv7/cortex-m4, arch/armv7/cortex-m7]
     container:
       image: chocotechnologies/dmod:1.0.4
+
     steps:
-      - uses: actions/checkout@v4
-      - name: Install test and audit tools
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install audit and test dependencies
         run: |
           apt-get update
           apt-get install -y --no-install-recommends python3 openssl
-      - name: Build
+
+      - name: Build dmhttp
         run: |
-          cmake -S . -B build -DDMOD_TOOLS_NAME=${{ matrix.tools }}
-          cmake --build build --parallel 4
+          mkdir -p build
+          cd build
+          cmake .. -DDMOD_MODE=DMOD_MODULE
+          cmake --build .
+
+      - name: Verify module files
+        run: |
+          echo "Checking for module files..."
+          ls -lh build/dmf/
           test -f build/dmf/dmhttp.dmf
+          test -f build/dmf/dmhttp_version.txt
           test -f build/dmf/test_dmhttp.dmf
-      - name: Native tests
-        if: matrix.tools == 'arch/x86_64'
-        run: ctest --test-dir build --output-on-failure
+          echo "Module files present"
+
+      - name: Run tests with dmod_loader
+        run: |
+          export DMOD_DMF_DIR=$(pwd)/build/dmf
+          dmf-get install -d ${DMOD_DMF_DIR}/test_dmhttp-local.dmd -y
+          dmod_loader build/dmf/test_dmhttp.dmf
+
+      - name: Run HTTP interoperability tests
+        run: ctest --test-dir build --output-on-failure -R "^http_interoperability$"
