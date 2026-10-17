@@ -59,7 +59,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Install audit and test dependencies
+      - name: Install test dependencies
         run: |
           apt-get update
           apt-get install -y --no-install-recommends python3 openssl

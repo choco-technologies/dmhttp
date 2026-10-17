@@ -14,6 +14,8 @@ extern "C"
 #define DMHTTP_HOST_MAX 253u
 
     typedef struct dmhttp *dmhttp_t;
+    /* Local operation results, not HTTP response status codes.
+     * Read response.status_code for the server response (e.g. 404). */
     typedef enum
     {
         DMHTTP_OK = 0,
@@ -34,6 +36,72 @@ extern "C"
         DMHTTP_ERR_CANCELLED = -11,
         DMHTTP_ERR_REDIRECT = -12
     } dmhttp_result_t;
+    /* HTTP response statuses use their standard wire values. This lists the
+     * permanent assigned statuses; status_code also preserves extension codes.
+     * https://www.iana.org/assignments/http-status-codes/ */
+    typedef enum
+    {
+        DMHTTP_STATUS_CONTINUE = 100,
+        DMHTTP_STATUS_SWITCHING_PROTOCOLS = 101,
+        DMHTTP_STATUS_PROCESSING = 102,
+        DMHTTP_STATUS_EARLY_HINTS = 103,
+        DMHTTP_STATUS_OK = 200,
+        DMHTTP_STATUS_CREATED = 201,
+        DMHTTP_STATUS_ACCEPTED = 202,
+        DMHTTP_STATUS_NON_AUTHORITATIVE_INFORMATION = 203,
+        DMHTTP_STATUS_NO_CONTENT = 204,
+        DMHTTP_STATUS_RESET_CONTENT = 205,
+        DMHTTP_STATUS_PARTIAL_CONTENT = 206,
+        DMHTTP_STATUS_MULTI_STATUS = 207,
+        DMHTTP_STATUS_ALREADY_REPORTED = 208,
+        DMHTTP_STATUS_IM_USED = 226,
+        DMHTTP_STATUS_MULTIPLE_CHOICES = 300,
+        DMHTTP_STATUS_MOVED_PERMANENTLY = 301,
+        DMHTTP_STATUS_FOUND = 302,
+        DMHTTP_STATUS_SEE_OTHER = 303,
+        DMHTTP_STATUS_NOT_MODIFIED = 304,
+        DMHTTP_STATUS_USE_PROXY = 305,
+        DMHTTP_STATUS_TEMPORARY_REDIRECT = 307,
+        DMHTTP_STATUS_PERMANENT_REDIRECT = 308,
+        DMHTTP_STATUS_BAD_REQUEST = 400,
+        DMHTTP_STATUS_UNAUTHORIZED = 401,
+        DMHTTP_STATUS_PAYMENT_REQUIRED = 402,
+        DMHTTP_STATUS_FORBIDDEN = 403,
+        DMHTTP_STATUS_NOT_FOUND = 404,
+        DMHTTP_STATUS_METHOD_NOT_ALLOWED = 405,
+        DMHTTP_STATUS_NOT_ACCEPTABLE = 406,
+        DMHTTP_STATUS_PROXY_AUTHENTICATION_REQUIRED = 407,
+        DMHTTP_STATUS_REQUEST_TIMEOUT = 408,
+        DMHTTP_STATUS_CONFLICT = 409,
+        DMHTTP_STATUS_GONE = 410,
+        DMHTTP_STATUS_LENGTH_REQUIRED = 411,
+        DMHTTP_STATUS_PRECONDITION_FAILED = 412,
+        DMHTTP_STATUS_CONTENT_TOO_LARGE = 413,
+        DMHTTP_STATUS_URI_TOO_LONG = 414,
+        DMHTTP_STATUS_UNSUPPORTED_MEDIA_TYPE = 415,
+        DMHTTP_STATUS_RANGE_NOT_SATISFIABLE = 416,
+        DMHTTP_STATUS_EXPECTATION_FAILED = 417,
+        DMHTTP_STATUS_MISDIRECTED_REQUEST = 421,
+        DMHTTP_STATUS_UNPROCESSABLE_CONTENT = 422,
+        DMHTTP_STATUS_LOCKED = 423,
+        DMHTTP_STATUS_FAILED_DEPENDENCY = 424,
+        DMHTTP_STATUS_TOO_EARLY = 425,
+        DMHTTP_STATUS_UPGRADE_REQUIRED = 426,
+        DMHTTP_STATUS_PRECONDITION_REQUIRED = 428,
+        DMHTTP_STATUS_TOO_MANY_REQUESTS = 429,
+        DMHTTP_STATUS_REQUEST_HEADER_FIELDS_TOO_LARGE = 431,
+        DMHTTP_STATUS_UNAVAILABLE_FOR_LEGAL_REASONS = 451,
+        DMHTTP_STATUS_INTERNAL_SERVER_ERROR = 500,
+        DMHTTP_STATUS_NOT_IMPLEMENTED = 501,
+        DMHTTP_STATUS_BAD_GATEWAY = 502,
+        DMHTTP_STATUS_SERVICE_UNAVAILABLE = 503,
+        DMHTTP_STATUS_GATEWAY_TIMEOUT = 504,
+        DMHTTP_STATUS_HTTP_VERSION_NOT_SUPPORTED = 505,
+        DMHTTP_STATUS_VARIANT_ALSO_NEGOTIATES = 506,
+        DMHTTP_STATUS_INSUFFICIENT_STORAGE = 507,
+        DMHTTP_STATUS_LOOP_DETECTED = 508,
+        DMHTTP_STATUS_NETWORK_AUTHENTICATION_REQUIRED = 511
+    } dmhttp_status_t;
     typedef enum
     {
         DMHTTP_GET = 0,
@@ -67,6 +135,9 @@ extern "C"
     } dmhttp_options_t;
     typedef struct
     {
+        /* Standard HTTP wire value; 0 until a status line is received.
+         * Inspect after step returns OK for the final response headers.
+         * HTTP 4xx/5xx do not become DMHTTP_ERR_* operation failures. */
         unsigned status_code;
         unsigned redirects;
         bool content_length_known;
@@ -85,7 +156,8 @@ extern "C"
      * Requests use Connection: close and Accept-Encoding: identity. No uploads,
      * authentication, decompression, pooling or proxy tunnelling are performed.
      * Calls on one handle must be externally serialized, including cancel/destroy.
-     * Callbacks must not reenter that handle. TLS must be initialized by its owner. */
+     * Callbacks must not reenter that handle. TLS must be initialized by its owner.
+     */
     dmod_dmhttp_api(1.0, dmhttp_result_t, _create,
                     (const char *url, const dmhttp_options_t *options, dmhttp_t *output));
     /* Advance to final response headers. OK means headers are available. AGAIN

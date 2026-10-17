@@ -13,7 +13,6 @@ target_include_directories(${DMOD_MODULE_NAME} PRIVATE
 )
 
 target_link_libraries(${DMOD_MODULE_NAME} dmhttp_if)
-dmhttp_audit_module(${DMOD_MODULE_NAME})
 dmod_link_modules(${DMOD_MODULE_NAME} dmtls)
 
 # Register the test module with ctest - this replays the same two steps CI

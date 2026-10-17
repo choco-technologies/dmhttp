@@ -1,11 +1,12 @@
 #define DMOD_ENABLE_REGISTRATION ON
-#include "dmod_test.h"
 #include "dmhttp.h"
+#include "dmod_test.h"
 #include <string.h>
 struct fixture
 {
     size_t at;
     unsigned closes;
+    bool not_found;
 };
 static dmtls_result_t open_stream(void *p, const char *host, uint16_t port)
 {
@@ -26,14 +27,16 @@ static dmtls_result_t send_stream(void *p, const uint8_t *bytes, size_t n, size_
 static dmtls_result_t recv_stream(void *p, uint8_t *out, size_t cap, size_t *n)
 {
     struct fixture *f = p;
-    static const char reply[] =
-        "HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n5\r\nhello\r\n0\r\n\r\n";
+    static const char reply[] = "HTTP/1.1 200 OK\r\nTransfer-Encoding: "
+                                "chunked\r\n\r\n5\r\nhello\r\n0\r\n\r\n";
+    static const char missing[] = "HTTP/1.1 404 Not Found\r\nContent-Length: 2\r\n\r\nno";
+    const char *response = f->not_found ? missing : reply;
     *n = 0;
-    if (f->at == sizeof(reply) - 1)
+    if (f->at == strlen(response))
         return DMTLS_OK;
     if (cap)
     {
-        out[0] = reply[f->at++];
+        out[0] = response[f->at++];
         *n = 1;
     }
     return DMTLS_OK;
@@ -103,6 +106,39 @@ DMOD_TEST_STEP(http_cancel_is_terminal_and_releases_connector)
     DMOD_TEST_EXPECT_EQ(dmhttp_step(h), DMHTTP_AGAIN);
     DMOD_TEST_EXPECT_EQ(dmhttp_cancel(h), DMHTTP_ERR_CANCELLED);
     DMOD_TEST_EXPECT_EQ(dmhttp_step(h), DMHTTP_ERR_CANCELLED);
+    dmhttp_destroy(h);
+    DMOD_TEST_EXPECT_EQ(f.closes, 1);
+}
+
+DMOD_TEST_STEP(http_preserves_not_found_status_and_body)
+{
+    struct fixture f = {0};
+    f.not_found = true;
+    dmhttp_options_t o;
+    options(&o, &f);
+    dmhttp_t h = NULL;
+    DMOD_TEST_EXPECT_EQ(dmhttp_create("http://example.test/missing", &o, &h), DMHTTP_OK);
+    dmhttp_result_t rc;
+    unsigned guard = 0;
+    do
+    {
+        rc = dmhttp_step(h);
+    } while (rc == DMHTTP_AGAIN && ++guard < 1000);
+    DMOD_TEST_EXPECT_EQ(rc, DMHTTP_OK);
+    dmhttp_response_t response;
+    DMOD_TEST_EXPECT_EQ(dmhttp_response(h, &response), DMHTTP_OK);
+    DMOD_TEST_EXPECT_EQ(response.status_code, DMHTTP_STATUS_NOT_FOUND);
+    DMOD_TEST_EXPECT_EQ(response.error, DMHTTP_OK);
+    char body[4] = {0};
+    size_t used = 0, received = 0;
+    do
+    {
+        rc = dmhttp_read(h, body + used, sizeof(body) - 1 - used, &received);
+        used += received;
+    } while ((rc == DMHTTP_OK || rc == DMHTTP_AGAIN) && ++guard < 1000);
+    DMOD_TEST_EXPECT_EQ(rc, DMHTTP_DONE);
+    DMOD_TEST_EXPECT_EQ(used, 2);
+    DMOD_TEST_EXPECT_EQ(strcmp(body, "no"), 0);
     dmhttp_destroy(h);
     DMOD_TEST_EXPECT_EQ(f.closes, 1);
 }

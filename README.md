@@ -18,8 +18,8 @@ cmake --build build/native --parallel
 ctest --test-dir build/native --output-on-failure
 ```
 
-A local SDK can be selected with `-DDMOD_DIR=/path/to/dmod`. Supported build
-profiles are `arch/x86_64`, `arch/armv7/cortex-m4` and `arch/armv7/cortex-m7`;
+A local SDK can be selected with `-DDMOD_DIR=/path/to/dmod`. Locally validated build
+profiles include `arch/x86_64`, `arch/armv7/cortex-m4` and `arch/armv7/cortex-m7`;
 select with `-DDMOD_TOOLS_NAME=...`. Module dependencies use the packager's
 version selection. The existing SDK/loader and 240-byte DMF format are unchanged.
 

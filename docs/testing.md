@@ -1,9 +1,9 @@
 # Build and validation
 
 Build profiles: x86-64, Cortex-M4 and Cortex-M7, with the existing SDK/loader.
-A read-only final-ELF audit requires absolute pointers to use the existing
-header/API/GOT sections; it does not rewrite binaries or add runtime fixups.
-The normal DMF header remains 240 bytes.
+No additional linker flags, binary rewriting or runtime fixups are required.
+The library stores callbacks in request instances; diagnostic applications use
+the SDK DMOD_GLOBAL_POINTER macro for their persistent callback addresses.
 
 ## Native
 
@@ -13,8 +13,9 @@ cmake --build build/native --parallel
 ctest --test-dir build/native --output-on-failure
 ```
 
-`test_dmhttp` runs the actual module through dmod_loader (3 checks): URL/TLS
-validation, fragmented chunk decoding, and cancellation/connector ownership.
+`test_dmhttp` runs the actual module through dmod_loader (4 checks): URL/TLS
+validation, fragmented chunk decoding, HTTP 404 status/body handling, and
+cancellation/connector ownership.
 
 `http_interoperability` compiles production HTTP and real dmtls/crypto sources
 with host SAL/OSI/time providers. Independent OpenSSL peers exercise HTTP,
@@ -66,7 +67,7 @@ Native socket tests and the TCP diagnostic use shorter finite limits.
 
 Recorded on STM32F746G-DISCO with the existing loader:
 
-- Actual module checks: 3/3.
+- Actual module checks before the review additions: 3/3.
 - UART/OpenSSL engine scenarios: 9/9 (HTTP framing/redirects, HTTPS TLS 1.2/1.3,
   HTTPS reconnect/redirect, hostname/CA rejection and downgrade rejection).
 - Real Ethernet/dmtcp HTTP: three complete 200 responses from example.com.

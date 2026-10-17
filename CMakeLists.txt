@@ -34,7 +34,6 @@ set(DMOD_DIR ${dmod_SOURCE_DIR} CACHE PATH "DMOD source directory")
 set(DMOD_SCRIPTS_DIR ${DMOD_DIR}/scripts CACHE PATH "DMOD scripts directory")
 include(${DMOD_DIR}/paths.cmake)
 dmod_setup_external_module()
-include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/pointer-audit.cmake)
 
 # Name of the module
 set(DMOD_MODULE_NAME        dmhttp)
@@ -75,7 +74,6 @@ target_include_directories(${DMOD_MODULE_NAME}_if INTERFACE
     ${CMAKE_CURRENT_SOURCE_DIR}/include
 )
 
-dmhttp_audit_module(${DMOD_MODULE_NAME})
 dmod_link_modules(${DMOD_MODULE_NAME} dmosi dmtls)
 enable_testing()
 add_subdirectory(tests)
